@@ -149,7 +149,7 @@ void
 MavESP8266Parameters::resetToDefaults()
 {
     _sw_version        = MAVESP8266_VERSION;
-    _debug_enabled     = 0;
+    _debug_enabled     = 0;        
     _wifi_mode         = DEFAULT_WIFI_MODE;
     _wifi_channel      = DEFAULT_WIFI_CHANNEL;
     _wifi_udp_hport    = DEFAULT_UDP_HPORT;
