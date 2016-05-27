@@ -33,6 +33,8 @@
  * ESP8266 Wifi AP, MavLink UART/UDP Bridge
  *
  * @author Gus Grubba <mavlink@grubba.com>
+ * ESP8266 WiFi AP, TCP Brdg
+ * @author Liangzelag <liangzelang@gmail.com>
  */
 
 #include "mavesp8266.h"
@@ -270,6 +272,11 @@ void loop() {
          ClientData[1] = 0;
        }
        flag=0;
+
+       while(!Serial.availableForWrite());              //Send the Insync signal to Vehicle 0x21+0x20
+       Serial.write(0x21);                              //avoid some Bizarre
+       while(!Serial.availableForWrite());
+       Serial.write(0x20);
 
        for(uint8_t i=0;i<41;i++ )
        {
