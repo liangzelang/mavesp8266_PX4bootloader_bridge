@@ -45,3 +45,17 @@ The MavESP8266 handles its own set of parameters and commands. Look at the [PARA
 ### HTTP Protocol
 
 There are some preliminary URLs that can be used for checking the WiFi Bridge status as well as updating firmware and changing parameters. [You can find it here.](HTTP.md)
+
+
+
+*********************************************************************************************************
+CUSTOMIZED
+
+I add other mode to upgrade the Firmware of PX4 through the WIFI ,and the Bootloader is recommended to use the following project.
+
+https://github.com/PX4/Bootloader.git
+
+However you should do some modifications .  
+1,   Change the default Serial port to USART3 with 921600 baud rate  ,because this project is upgrade the FW through the ESP8266 whose Serial port is connected to the USART3 of PX4.
+
+2016.05.27
