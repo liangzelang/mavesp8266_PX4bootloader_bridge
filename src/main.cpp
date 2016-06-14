@@ -330,24 +330,26 @@ void loop() {
        while(Bin_trans_flag==1)                        //Entry the lopp of sending bin file
        {
          while(!client.available());
+
          client.readBytes(ControlData, 2);             //The first byte is status of trans 0x01 :continual   0x02 : last one
                                                        //The second byte is the length of data this time  ,the range:0-255 ,and especially ,must be A multiple of 4
          client.readBytes(BinDate, ControlData[1]);    //Then read the bin data
-         client.flush();                               //Clean the client buffer in order to receive new data next time
+        client.flush();                               //Clean the client buffer in order to receive new data next time
          while(Serial.read() >= 0);                    //Before send the data to Vehicle ,clean the Rx buffer
-         Serial1.print(ControlData[0]);
-         Serial1.print(ControlData[1]);
-         Serial1.print(BinDate[0]);
+         //Serial1.print(ControlData[0]);
+        //Serial1.print(ControlData[1]);
+         //Serial1.print(BinDate[0]);
          Write_to_Vehicle(BinDate,ControlData[1]);     //Send the data to Vehicle
          wait_ack();
-         if(ControlData[0]==0x02)
-         {
-           Bin_trans_flag=0;                           //If the first byte equal 0x02  ,after this trans jump out.
-         }
-         else if(ControlData[0]==0x01)
+
+        if(ControlData[0]==0x01)
          {
            client.write(0x01);                        //tell the GCS ,send  your data  .
            client.write(0x21);                        //0x01  0x21  (customized)
+         }
+         else if(ControlData[0]==0x02)
+         {
+           Bin_trans_flag=0;                           //If the first byte equal 0x02  ,after this trans jump out.
          }
        }
 
@@ -380,7 +382,7 @@ void wait_ack(){
   while(flag==0){
     if(Serial.available()>0){
       Serial.readBytes(SerialData, 2);
-      Serial1.println(Serial.available());
+      //Serial1.println(Serial.available());
       Serial1.println(SerialData[0]);
       Serial1.println(SerialData[1]);
         if((SerialData[0]==0x12)&&(SerialData[1]==0x10))
@@ -388,21 +390,21 @@ void wait_ack(){
             flag=1;
             SerialData[0]=0;
             SerialData[1]=0;
-            delay(100);
+            //delay(100);
         }
         else
         {
           flag=0;
           SerialData[0]=0;
           SerialData[1]=0;
-          delay(100);
+          //delay(100);
         }
     }
-    else
-    {
-      Serial1.print(".");
-      delay(1000);
-    }
+  //  else
+  //  {
+  //    Serial1.print(".");
+      //delay(1000);
+  //  }
   }
   flag=0;
 }
