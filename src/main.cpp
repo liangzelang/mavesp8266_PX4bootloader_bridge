@@ -46,6 +46,8 @@
 
 #include <ESP8266mDNS.h>
 
+
+
 #define GPIO02  2
 WiFiClient client;
 WiFiServer server(8086);
@@ -154,6 +156,7 @@ void reset_interrupt(){
 void setup() {
     delay(1000);
     Parameters.begin();
+
 #ifdef ENABLE_DEBUG
     //   We only use it for non debug because GPIO02 is used as a serial
     //   pin (TX) when debugging.
@@ -168,7 +171,6 @@ void setup() {
     DEBUG_LOG("Free Sketch Space: %u\n", ESP.getFreeSketchSpace());
 
     WiFi.disconnect(true);
-
     if(Parameters.getWifiMode() == WIFI_MODE_STA){
         //-- Connect to an existing network
         WiFi.mode(WIFI_STA);
@@ -198,9 +200,7 @@ void setup() {
         localIP = WiFi.softAPIP();
         Serial1.print("localIP: ");
         Serial1.println(localIP);
-        subnet = WiFi.subnetMask();
-        Serial1.print("NETMASK: ");
-        Serial1.println(subnet);
+
         DEBUG_LOG("Waiting for DHCPD...\n");
         dhcp_status dstat = wifi_station_dhcpc_status();    //此处为启动DHCP  服务器，以自动给其网络下的分配 IP   ，在第一次接收到UDP报文，里面
         while (dstat != DHCP_STARTED) {                     //就得到IP。不再广播   。位于GCS.cpp
@@ -239,6 +239,7 @@ void setup() {
 //---------------------------------------------------------------------------------
 //-- Main Loop
 void loop() {
+
     if(!updateStatus.isUpdating()) {
         GCS.readMessage();
         delay(0);
@@ -265,8 +266,15 @@ void loop() {
          client.flush();                                //clean the cache buffer
          if ((ClientData[0]==0x01)&&(ClientData[1]==0x20))
          {                                             //If got the (0x01+0x20) from client
-           Serial1.println("The GCS is ready");
+           Serial1.println("The GCS is ready,Client ask for upload binary");
            flag=1;
+           Bin_trans_flag=1;                           //enable the progress of sending data
+         }
+         else if((ClientData[0]==0x03)&&(ClientData[1]==0x20))
+         {
+           Serial1.println("The GCS is ready,Client ask for Erase the chip");
+           flag=1;
+           Bin_trans_flag=0;                          //disable the progress of sending data
          }
          ClientData[0] = 0;
          ClientData[1] = 0;
@@ -334,15 +342,14 @@ void loop() {
          client.readBytes(ControlData, 2);             //The first byte is status of trans 0x01 :continual   0x02 : last one
                                                        //The second byte is the length of data this time  ,the range:0-255 ,and especially ,must be A multiple of 4
          client.readBytes(BinDate, ControlData[1]);    //Then read the bin data
-        client.flush();                               //Clean the client buffer in order to receive new data next time
+        //client.flush();                               //Clean the client buffer in order to receive new data next time
          while(Serial.read() >= 0);                    //Before send the data to Vehicle ,clean the Rx buffer
          //Serial1.print(ControlData[0]);
         //Serial1.print(ControlData[1]);
          //Serial1.print(BinDate[0]);
          Write_to_Vehicle(BinDate,ControlData[1]);     //Send the data to Vehicle
-         wait_ack();
 
-        if(ControlData[0]==0x01)
+        if((ControlData[0]==0x01)&&(client.available()<=1270))
          {
            client.write(0x01);                        //tell the GCS ,send  your data  .
            client.write(0x21);                        //0x01  0x21  (customized)
@@ -351,6 +358,7 @@ void loop() {
          {
            Bin_trans_flag=0;                           //If the first byte equal 0x02  ,after this trans jump out.
          }
+         wait_ack();
        }
 
 
