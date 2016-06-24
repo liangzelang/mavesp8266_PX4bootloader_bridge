@@ -337,11 +337,24 @@ void loop() {
        client.write(0x21);
        while(Bin_trans_flag==1)                        //Entry the lopp of sending bin file
        {
-         while(!client.available());
-
+         //if(headfl)
+         while(client.available()<2);
          client.readBytes(ControlData, 2);             //The first byte is status of trans 0x01 :continual   0x02 : last one
                                                        //The second byte is the length of data this time  ,the range:0-255 ,and especially ,must be A multiple of 4
+         while(!(client.available()>=(int)ControlData[1]))
+         {
+           Serial1.print("wait the wifi data, the available data is : ");
+           Serial1.println(client.available());
+          // Serial1.println(client.a)
+
+           Serial1.print("the total data length is :");
+           Serial1.write(ControlData[1]);
+           Serial1.println("     over");
+           continue;
+
+         }
          client.readBytes(BinDate, ControlData[1]);    //Then read the bin data
+
         //client.flush();                               //Clean the client buffer in order to receive new data next time
          while(Serial.read() >= 0);                    //Before send the data to Vehicle ,clean the Rx buffer
          //Serial1.print(ControlData[0]);
