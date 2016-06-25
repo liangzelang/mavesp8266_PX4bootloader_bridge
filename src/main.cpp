@@ -59,6 +59,10 @@ char SerialData[2]={0};
 char ControlData[2]={0};
 char BinDate[256]={0};
 char flag=0;
+char firstFlag=0;
+char temp=0;
+char tempPos=0;
+char length=0;
 char Bin_trans_flag=1;
 char Firmware_mode_flag=0;
 //function
@@ -337,23 +341,36 @@ void loop() {
        client.write(0x21);
        while(Bin_trans_flag==1)                        //Entry the lopp of sending bin file
        {
-         //if(headfl)
-         while(client.available()<2);
-         client.readBytes(ControlData, 2);             //The first byte is status of trans 0x01 :continual   0x02 : last one
-                                                       //The second byte is the length of data this time  ,the range:0-255 ,and especially ,must be A multiple of 4
-         while(!(client.available()>=(int)ControlData[1]))
+
+         while(!client.available());
+
+         if(firstFlag==0)
          {
-           Serial1.print("wait the wifi data, the available data is : ");
-           Serial1.println(client.available());
-          // Serial1.println(client.a)
-
-           Serial1.print("the total data length is :");
-           Serial1.write(ControlData[1]);
-           Serial1.println("     over");
-           continue;
-
+           client.readBytes(ControlData, 2);             //The first byte is status of trans 0x01 :continual   0x02 : last one
+                                                         //The second byte is the length of data this time  ,the range:0-255 ,and especially ,must be A multiple of 4
+           temp=client.readBytes(BinDate, ControlData[1]);
+           if(temp<ControlData[1])
+           {
+             length= ControlData[1]-temp;
+             tempPos=temp;
+             firstFlag=1;
+             continue;
+           }
          }
-         client.readBytes(BinDate, ControlData[1]);    //Then read the bin data
+
+         else if (firstFlag==1)
+         {
+           temp=client.readBytes(&BinDate[tempPos], length);
+           if(temp<length)
+           {
+             length=length-temp;
+             tempPos=tempPos+temp;
+             firstFlag=1;
+             continue;
+           }
+         }
+         firstFlag=0;
+         //client.readBytes(BinDate, ControlData[1]);    //Then read the bin data
 
         //client.flush();                               //Clean the client buffer in order to receive new data next time
          while(Serial.read() >= 0);                    //Before send the data to Vehicle ,clean the Rx buffer
