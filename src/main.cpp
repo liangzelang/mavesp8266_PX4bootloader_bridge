@@ -49,22 +49,24 @@
 
 
 #define GPIO02  2
-WiFiClient client;
-WiFiServer server(8086);
+WiFiClient client;									//定义一个TCP client对象
+WiFiServer server(8086);						//定义一个TCP server对象，并监听端口8086
+char ClientData[2]={0};							//用于存放网络接收缓存数据
 
+/*char SerialData[2]={0};						//用于存放串口接收缓存数据
+ char ControlData[2]={0};						//用于存放每一帧数据前两个字节
+char BinDate[256]={0};							//用于存放每一帧数据中实际bin文件数据
+char temp=0;											//临时变量，用于存放当前读取的字节数
+char tempPos=0;									//临时变量，用于存放数据存储位置
+char length=0;										//临时变量，用于存放当前帧还需读取的字节长度
+char flag=0;												//等待回复标志位
+char firstFlag=0;										//每一帧数据第一次读取标志位
+char Bin_trans_flag=1;							//bin文件传输标志位
+char Firmware_mode_flag=0;				//固件升级标志
 char Reboot_ID1[41]={0xfe,0x21,0x72,0xff,0x00,0x4c,0x00,0x00,0x80,0x3f,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xf6,0x00,0x01,0x00,0x00,0x48,0xf0};
 char Reboot_ID0[41]={0xfe,0x21,0x45,0xff,0x00,0x4c,0x00,0x00,0x80,0x3f,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xf6,0x00,0x00,0x00,0x00,0xd7,0xac};
-char ClientData[2]={0};
-char SerialData[2]={0};
-char ControlData[2]={0};
-char BinDate[256]={0};
-char flag=0;
-char firstFlag=0;
-char temp=0;
-char tempPos=0;
-char length=0;
-char Bin_trans_flag=1;
-char Firmware_mode_flag=0;
+*/
+
 //function
 void wait_ack();
 void wait_wifi_ack();
@@ -113,382 +115,353 @@ MavESP8266Log           Logger;
 //-- Accessors
 class MavESP8266WorldImp : public MavESP8266World {
 public:
-    MavESP8266Parameters*   getParameters   () { return &Parameters;    }
-    MavESP8266Component*    getComponent    () { return &Component;     }
-    MavESP8266Vehicle*      getVehicle      () { return &Vehicle;       }
-    MavESP8266GCS*          getGCS          () { return &GCS;           }
-    MavESP8266Log*          getLogger       () { return &Logger;        }
+	MavESP8266Parameters*   getParameters   () { return &Parameters;    }
+	MavESP8266Component*    getComponent    () { return &Component;     }
+	MavESP8266Vehicle*      getVehicle      () { return &Vehicle;       }
+	MavESP8266GCS*          getGCS          () { return &GCS;           }
+	MavESP8266Log*          getLogger       () { return &Logger;        }
 };
 
 MavESP8266WorldImp      World;
 
 MavESP8266World* getWorld()
 {
-    return &World;
+	return &World;
 }
 
 //---------------------------------------------------------------------------------
 //-- Wait for a DHCPD client
 void wait_for_client() {
-    DEBUG_LOG("Waiting for a client...\n");
-    int wcount = 0;
-    uint8 client_count = wifi_softap_get_station_num();
-    while (!client_count) {
-        #ifdef ENABLE_DEBUG
-        Serial1.print(".");
-        if(++wcount > 80) {
-            wcount = 0;
-            Serial1.println();
-        }
-        #endif
-        delay(1000);
-        client_count = wifi_softap_get_station_num();
-    }
-    DEBUG_LOG("Got %d client(s)\n", client_count);
+	DEBUG_LOG("Waiting for a client...\n");
+	int wcount = 0;
+	uint8 client_count = wifi_softap_get_station_num();
+	while (!client_count) {
+#ifdef ENABLE_DEBUG
+		Serial1.print(".");
+		if(++wcount > 80) {
+			wcount = 0;
+			Serial1.println();
+		}
+#endif
+		delay(1000);
+		client_count = wifi_softap_get_station_num();
+	}
+	DEBUG_LOG("Got %d client(s)\n", client_count);
 }
 
 //---------------------------------------------------------------------------------
 //-- Reset all parameters whenever the reset gpio pin is active
-void reset_interrupt(){
-    Parameters.resetToDefaults();
-    Parameters.saveAllToEeprom();
-    ESP.reset();
+void reset_interrupt() {
+	Parameters.resetToDefaults();
+	Parameters.saveAllToEeprom();
+	ESP.reset();
 }
 
 //---------------------------------------------------------------------------------
 //-- Set things up
 void setup() {
-    delay(1000);
-    Parameters.begin();
+	delay(1000);
+	Parameters.begin();
 
 #ifdef ENABLE_DEBUG
-    //   We only use it for non debug because GPIO02 is used as a serial
-    //   pin (TX) when debugging.
-    Serial1.begin(921600);
+	//   We only use it for non debug because GPIO02 is used as a serial
+	//   pin (TX) when debugging.
+	Serial1.begin(921600);
 #else
-    //-- Initialized GPIO02 (Used for "Reset To Factory")
-    pinMode(GPIO02, INPUT_PULLUP);
-    attachInterrupt(GPIO02, reset_interrupt, FALLING);
+	//-- Initialized GPIO02 (Used for "Reset To Factory")
+	pinMode(GPIO02, INPUT_PULLUP);
+	attachInterrupt(GPIO02, reset_interrupt, FALLING);
 #endif
-    Logger.begin(2048);
-    DEBUG_LOG("\nConfiguring access point...\n");
-    DEBUG_LOG("Free Sketch Space: %u\n", ESP.getFreeSketchSpace());
+	Logger.begin(2048);
+	DEBUG_LOG("\nConfiguring access point...\n");
+	DEBUG_LOG("Free Sketch Space: %u\n", ESP.getFreeSketchSpace());
 
-    WiFi.disconnect(true);
-    if(Parameters.getWifiMode() == WIFI_MODE_STA){
-        //-- Connect to an existing network
-        WiFi.mode(WIFI_STA);
-        WiFi.begin(Parameters.getWifiStaSsid(), Parameters.getWifiStaPassword());
-        //-- Wait a minute to connect
-        for(int i = 0; i < 120 && WiFi.status() != WL_CONNECTED; i++) {
-            #ifdef ENABLE_DEBUG
-            Serial.print(".");
-            #endif
-            delay(500);
-        }
-        if(WiFi.status() == WL_CONNECTED) {
-            localIP = WiFi.localIP();
-            WiFi.setAutoReconnect(true);
-        } else {
-            //-- Fall back to AP mode if no connection could be established
-            WiFi.disconnect(true);
-            Parameters.setWifiMode(WIFI_MODE_AP);
-        }
-    }
+	WiFi.disconnect(true);
+	if(Parameters.getWifiMode() == WIFI_MODE_STA) {
+		//-- Connect to an existing network
+		WiFi.mode(WIFI_STA);
+		WiFi.begin(Parameters.getWifiStaSsid(), Parameters.getWifiStaPassword());
+		//-- Wait a minute to connect
+		for(int i = 0; i < 120 && WiFi.status() != WL_CONNECTED; i++) {
+#ifdef ENABLE_DEBUG
+			Serial.print(".");
+#endif
+			delay(500);
+		}
+		if(WiFi.status() == WL_CONNECTED) {
+			localIP = WiFi.localIP();
+			WiFi.setAutoReconnect(true);
+		} else {
+			//-- Fall back to AP mode if no connection could be established
+			WiFi.disconnect(true);
+			Parameters.setWifiMode(WIFI_MODE_AP);
+		}
+	}
 
-    if(Parameters.getWifiMode() == WIFI_MODE_AP){
-        //-- Start AP
-        WiFi.mode(WIFI_AP);
-        WiFi.encryptionType(AUTH_WPA2_PSK);
-        WiFi.softAP(Parameters.getWifiSsid(), Parameters.getWifiPassword(), Parameters.getWifiChannel());
-        localIP = WiFi.softAPIP();
-        Serial1.print("localIP: ");
-        Serial1.println(localIP);
+	if(Parameters.getWifiMode() == WIFI_MODE_AP) {
+	//-- Start AP
+		WiFi.mode(WIFI_AP);
+		WiFi.encryptionType(AUTH_WPA2_PSK);
+		WiFi.softAP(Parameters.getWifiSsid(), Parameters.getWifiPassword(), Parameters.getWifiChannel());
+		localIP = WiFi.softAPIP();
+		Serial1.print("localIP: ");
+		Serial1.println(localIP);
 
-        DEBUG_LOG("Waiting for DHCPD...\n");
-        dhcp_status dstat = wifi_station_dhcpc_status();    //此处为启动DHCP  服务器，以自动给其网络下的分配 IP   ，在第一次接收到UDP报文，里面
-        while (dstat != DHCP_STARTED) {                     //就得到IP。不再广播   。位于GCS.cpp
-            #ifdef ENABLE_DEBUG
-            Serial1.print(".");
-            #endif
-            delay(500);
-            dstat = wifi_station_dhcpc_status();
-        }
-        wait_for_client();                                   //等待有WIFI客户端连接至  ESP8266  上
-    }
+		DEBUG_LOG("Waiting for DHCPD...\n");
+		dhcp_status dstat = wifi_station_dhcpc_status();				//此处为启动DHCP  服务器，以自动给其网络下的分配 IP   ，在第一次接收到UDP报文，里面
+		while (dstat != DHCP_STARTED) {										//就得到IP。不再广播   。位于GCS.cpp
+			#ifdef ENABLE_DEBUG
+			Serial1.print(".");
+			#endif
+			delay(500);
+			dstat = wifi_station_dhcpc_status();
+		}
+		wait_for_client();											//等待有WIFI客户端连接至  ESP8266  上
+	}
 
-    //-- Boost power to Max
-    WiFi.setOutputPower(20.5);
+	//-- Boost power to Max
+	WiFi.setOutputPower(20.5);
 
-
-    //-- MDNS                                               //组播DNS，至于是个什么玩意没太懂
-    char mdsnName[256];
-    sprintf(mdsnName, "MavEsp8266-%d",localIP[3]);
-    MDNS.begin(mdsnName);
-    MDNS.addService("http", "tcp", 80);
-    //-- Initialize Comm Links
-    DEBUG_LOG("Start WiFi Bridge\n");
-    Parameters.setLocalIPAddress(localIP);
-    IPAddress gcs_ip(localIP);
-    //-- I'm getting bogus IP from the DHCP server. Broadcasting for now.
-    gcs_ip[3] = 255;
-    GCS.begin((MavESP8266Bridge*)&Vehicle, gcs_ip);
-    Serial1.println(gcs_ip);
-    Vehicle.begin((MavESP8266Bridge*)&GCS);
-    //-- Initialize Update Server
-    updateServer.begin(&updateStatus);
-    server.begin();                                       //begin the TCP server
+	//-- MDNS														//组播DNS，至于是个什么玩意没太懂
+	char mdsnName[256];
+	sprintf(mdsnName, "MavEsp8266-%d",localIP[3]);
+	MDNS.begin(mdsnName);
+	MDNS.addService("http", "tcp", 80);
+	//-- Initialize Comm Links
+	DEBUG_LOG("Start WiFi Bridge\n");
+	Parameters.setLocalIPAddress(localIP);
+	IPAddress gcs_ip(localIP);
+	//-- I'm getting bogus IP from the DHCP server. Broadcasting for now.
+	gcs_ip[3] = 255;
+	GCS.begin((MavESP8266Bridge*)&Vehicle, gcs_ip);
+	Serial1.println(gcs_ip);
+	Vehicle.begin((MavESP8266Bridge*)&GCS);
+	//-- Initialize Update Server
+	updateServer.begin(&updateStatus);
+	server.begin();											//启动TCP服务器
 }
 
 //---------------------------------------------------------------------------------
 //-- Main Loop
 void loop() {
 
-    if(!updateStatus.isUpdating()) {
-        GCS.readMessage();
-        delay(0);
-        Vehicle.readMessage();
+	bool flag=0;											//等待回复标志位
+	bool firstFlag=0;										//每一帧数据第一次读取标志位
+	bool Bin_trans_flag=1;							//bin文件传输标志位
+	bool Firmware_mode_flag=0;				//固件升级标志
 
-    }
-    updateServer.checkUpdates();
-    client = server.available();                        //check whether there is one client connecting to the server or not
-    if(client)                                          //if there is a client ,got it
-    {
-      Firmware_mode_flag=1;
-    }
-    while(Firmware_mode_flag)                           //Enter the loop of TCP mode
-    {
-      while(!client.available())
-      {
-        Serial1.print(".");
-        delay(500);
-      }
-      while(flag==0)
-       {
-         client.readBytes(ClientData, 2);
-         Serial1.print(ClientData);                     //Serial1 is just a debug monitor
-         client.flush();                                //clean the cache buffer
-         if ((ClientData[0]==0x01)&&(ClientData[1]==0x20))
-         {                                             //If got the (0x01+0x20) from client
-           Serial1.println("The GCS is ready,Client ask for upload binary");
-           flag=1;
-           Bin_trans_flag=1;                           //enable the progress of sending data
-         }
-         else if((ClientData[0]==0x03)&&(ClientData[1]==0x20))
-         {
-           Serial1.println("The GCS is ready,Client ask for Erase the chip");
-           flag=1;
-           Bin_trans_flag=0;                          //disable the progress of sending data
-         }
-         ClientData[0] = 0;
-         ClientData[1] = 0;
-       }
+	char temp=0;											//临时变量，用于存放当前读取的字节数
+	char tempPos=0;									//临时变量，用于存放数据存储位置
+	char length=0;										//临时变量，用于存放当前帧还需读取的字节长度
+	char ControlData[2]={0};						//用于存放每一帧数据前两个字节
+	char BinDate[256]={0};							//用于存放每一帧数据中实际bin文件数据
+
+	char Reboot_ID1[41]={0xfe,0x21,0x72,0xff,0x00,0x4c,0x00,0x00,0x80,0x3f,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xf6,0x00,0x01,0x00,0x00,0x48,0xf0};
+	char Reboot_ID0[41]={0xfe,0x21,0x45,0xff,0x00,0x4c,0x00,0x00,0x80,0x3f,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xf6,0x00,0x00,0x00,0x00,0xd7,0xac};
+
+	if(!updateStatus.isUpdating()) {
+		GCS.readMessage();
+		delay(0);
+		Vehicle.readMessage();
+	}
+	updateServer.checkUpdates();
+
+    //liangzelang below//
+	client = server.available();								//检测是否有TCP客户端连接至服务器
+	if(client)															//如果有TCP客户端连接上，至 固件升级标志位 为1
+		Firmware_mode_flag=1;
+    while(Firmware_mode_flag) {						//进入固件升级模式
+    	while(!client.available()) {							//等待已连接上的客户端的数据
+			Serial1.print(".");
+			delay(500);
+    	}
+    	while(flag==0) {
+			client.readBytes(ClientData, 2);				//读取来自TCP客户端两字节数据
+			Serial1.print(ClientData);						//Serial 1用作调试串口
+			client.flush();											//清除网络接收缓冲
+			if ((ClientData[0]==0x01)&&(ClientData[1]==0x20)) {				//如果接收的数据为0x01+0x20，执行upload流程
+				Serial1.println("The GCS is ready,Client ask for upload binary");
+				flag=1;
+				Bin_trans_flag=1;								//使能烧写程序过程标志位
+			} else if((ClientData[0]==0x02)&&(ClientData[1]==0x20)) {	//如果接收的数据为0x02+0x20，执行erase流程
+				Serial1.println("The GCS is ready,Client ask for Erase the chip");
+				flag=1;
+				Bin_trans_flag=0;								//失能烧写程序过程标志位
+			}
+			ClientData[0] = 0;
+			ClientData[1] = 0;
+		}
        flag=0;
 
-       while(!Serial.availableForWrite());              //Send the Insync signal to Vehicle 0x21+0x20
-       Serial.write(0x21);                              //avoid some Bizarre
-       while(!Serial.availableForWrite());
-       Serial.write(0x20);
+		while(!Serial.availableForWrite());			//避免出现奇怪的错误，先发送一次同步信号
+		Serial.write(0x21);										//发送同步请求信号至飞控：0x21+0x20
+		while(!Serial.availableForWrite());
+		Serial.write(0x20);
 
-       for(uint8_t i=0;i<41;i++ )
-       {
-         while(!Serial.availableForWrite());              //Send the Reboot signal to Vehicle
-         Serial.write(Reboot_ID1[i]);
-       }
-       delay(300);
-       for(uint8_t i=0;i<41;i++ )
-       {
-         while(!Serial.availableForWrite());
-         Serial.write(Reboot_ID0[i]);
-       }
-       //Serial.flush();                                   //Waits for the transmission of outgoing serial data to complete. (Prior to Arduino 1.0, this instead removed any buffered incoming serial data.)
-       delay(1500);                                      //Wait 1.5s for the reset of Vehicl
-       while(Serial.available()>0)
-            Serial.read();
-       while(Serial.read() >= 0);                        //Clean the Rx buffer by reading the buffer zone
-       //Serial.flush();                                 // Attention!!!  this function is to wait for the completion of sending  afer arduino 1.0
-                                                         // and especially, prior to arduino 1.0 ,this function instead remove the Rx buffer
-       while(!Serial.availableForWrite());
-       Serial.write(0x21);                               //Send the Insync signal to Vehicle 0x21+0x20
-       while(!Serial.availableForWrite());
-       Serial.write(0x20);
-       wait_ack();                                      //Wait for the Insync echo from Vehicle   0x12+0x10(Insync Ok)  0x12+0x13(Insync Invalid)
-       Serial1.println("got the Insync ack");
-       delay(1000);
+		for(uint8_t i=0;i<41;i++ ) {							//发送Reboot信号至飞控，使其重启进入Bootloader
+			while(!Serial.availableForWrite());
+			Serial.write(Reboot_ID1[i]);
+		}
+		delay(300);
+		for(uint8_t i=0;i<41;i++ ) {
+			while(!Serial.availableForWrite());
+			Serial.write(Reboot_ID0[i]);
+		}
 
-       //...TO DO
-       //add the confirm of ERASE function from Vehicle
-       client.flush();
-       client.write(0x01);                             //ASK the GCS ,whether erase the
-       client.write(0x20);
-       wait_wifi_ack();
-       //...TO DO
+		delay(1500);												//延时1.5秒，等待飞控重启。此延时不能超过5秒，因为bootloader的延时为5秒
+		while(Serial.available()>0);						//此处好像错了，先保留。Attention！！！
+		Serial.read();
+		while(Serial.read() >= 0);							//通过读取串口的接受缓冲区来清除缓存区数据
+		//Serial.flush();                                 // Attention!!!  this function is to wait for the completion of sending  afer arduino 1.0
+																// and especially, prior to arduino 1.0 ,this function instead remove the Rx buffer
+		while(!Serial.availableForWrite());
+		Serial.write(0x21);										//发送同步请求信号至飞控：0x21+0x20
+		while(!Serial.availableForWrite());
+		Serial.write(0x20);
+		wait_ack();													//等待飞控的回复  0x12+0x10(Insync Ok)  0x12+0x13(Insync Invalid)
+		Serial1.println("got the Insync ack");
+		delay(1000);
 
-       while(Serial.read() >= 0);                       //Waits for the transmission of outgoing serial data to complete.
-       while(!Serial.availableForWrite());              //Send the Erase signal to Vehicle 0x23+0x20
-       Serial.write(0x23);
-       while(!Serial.availableForWrite());
-       Serial.write(0x20);
-       wait_ack();                                     //Wait for the Insync echo from Vehicle   0x12+0x10(Insync Ok)  0x12+0x13(Insync Invalid)
-       Serial1.println("got the Erase ack");
+		//...TO DO
+		//add the confirm of ERASE function from Vehicle
+		client.flush();												//清除网络接收缓存
+		client.write(0x31);										//向Qt端发送芯片擦除请求: 0x31+0x02(可自定义)
+		client.write(0x02);
+		wait_wifi_ack();											//等待Qt端回复 （0x12+0x10）
+		//...TO DO
 
-       client.write(0x01);                             //Tell the GCS ,ESP is ready to receive bin data and send it to vehicle
-       client.write(0x20);
-       wait_wifi_ack();
-       Serial1.println("got the wifi start ack");
+		while(Serial.read() >= 0);							//通过读取数据清除数据缓存区数据
+		while(!Serial.availableForWrite());			//等待串口可写
+		Serial.write(0x23);										//发送Erase信号至飞控：0x23+0x20
+		while(!Serial.availableForWrite());
+		Serial.write(0x20);
+		wait_ack();													//等待飞控的同步信号回复：0x12+0x10(Insync Ok)  0x12+0x13(Insync Invalid)
+		Serial1.println("got the Erase ack");
 
-       client.write(0x01);                             //Tell the GCS ,send  your data .  0x01+0x21 (this is customized)
-       client.write(0x21);
-       while(Bin_trans_flag==1)                        //Entry the lopp of sending bin file
-       {
+		client.write(0x31);										//发送数据至Qt端，提示ESP已经做好接受bin文件数据的准备:0x31+0x03(可自定义)
+		client.write(0x03);
+		wait_wifi_ack();											//等待来自Qt端的回复
+		Serial1.println("got the wifi start ack");
 
-         while(!client.available());
+		client.write(0x31);										//向Qt端发送数据请求：0x31+0x01 (可自定义)
+		client.write(0x01);
+		while(Bin_trans_flag==1) {						//进入循环接收、烧写bin文件的循环
+			while(!client.available());
+			if(firstFlag==0) {										//如果是每一帧的第一次读取
+				client.readBytes(ControlData, 2);		//先读取前两个字节，第一个字节（0x01：不是最后一帧数据，0x02：最后一帧数据）
+																			//第二个字节（此帧数据的长度，不含头两个字节，一般为252.值得注意的是该数字必须是4的倍数）
+				temp=client.readBytes(BinDate, ControlData[1]);	//欲读取ControlData[1]长度的数据，并得到实际读取长度temp
+				if(temp<ControlData[1]) {					//如果没有读取完这一帧的数据
+					length= ControlData[1]-temp;		//计算还需要读取的字节长度length
+					tempPos=temp;								//计算下次读取数据存放在BinData数组的位置
+					firstFlag=1;										//置标志位
+					continue;										//结束本次循环，从头开始等待数据到来
+				}
+			} else if (firstFlag==1) {							//如果不是每一帧的第一次读取
+				temp=client.readBytes(&BinDate[tempPos], length);			//欲读取length长度的数据，实际读取长度为temp
+				if(temp<length) {								//如果没有读完
+					length=length-temp;						//计算还需读取的字节长度
+					tempPos=tempPos+temp;				//计算下次读取数据存放的位置
+					firstFlag=1;										//置标志位，此处没有必要
+					continue;										//结束本次循环，从头开始等待数据到来
+				}
+			}
+			firstFlag=0;												//重置标志位firstFlag，使下帧数据能够正常接收
+			while(Serial.read() >= 0);						//在向飞控发送数据之前，需清除串口接收缓存
+			Write_to_Vehicle(BinDate,ControlData[1]);									//发送数据至飞控
+			if((ControlData[0]==0x01)&&(client.available()<=1270)) {				//当前帧不是最后一帧，且网络接收缓存小于五帧数据（一帧为252字节，5*252=1270）
+				client.write(0x31);								//向Qt端发送数据请求：0x01+0x21（可自定义）
+				client.write(0x01);
+			} else if(ControlData[0]==0x02)				//当前帧是最后一帧，不再发送数据请求
+				Bin_trans_flag=0;								//重置Bin传输标志位，以便此帧传输结束后，跳出该循环
+			wait_ack();												//等待飞控的回复：0x12+0x10
+		}
 
-         if(firstFlag==0)
-         {
-           client.readBytes(ControlData, 2);             //The first byte is status of trans 0x01 :continual   0x02 : last one
-                                                         //The second byte is the length of data this time  ,the range:0-255 ,and especially ,must be A multiple of 4
-           temp=client.readBytes(BinDate, ControlData[1]);
-           if(temp<ControlData[1])
-           {
-             length= ControlData[1]-temp;
-             tempPos=temp;
-             firstFlag=1;
-             continue;
-           }
-         }
+		//...TO DO
+		//add the confirm of Reboot function
+		//..TO DO
 
-         else if (firstFlag==1)
-         {
-           temp=client.readBytes(&BinDate[tempPos], length);
-           if(temp<length)
-           {
-             length=length-temp;
-             tempPos=tempPos+temp;
-             firstFlag=1;
-             continue;
-           }
-         }
-         firstFlag=0;
-         //client.readBytes(BinDate, ControlData[1]);    //Then read the bin data
+		while(Serial.read() >= 0);							//发送命令至飞控之前，清除串口缓冲区
+		while(!Serial.availableForWrite());			//等待串口可写
+		Serial.write(0x30);										//发送重启命令：0x30+0x20
+		while(!Serial.availableForWrite());
+		Serial.write(0x20);
+		wait_ack();													//等待飞控回复
+		Serial1.println("got the Boot ack");
 
-        //client.flush();                               //Clean the client buffer in order to receive new data next time
-         while(Serial.read() >= 0);                    //Before send the data to Vehicle ,clean the Rx buffer
-         //Serial1.print(ControlData[0]);
-        //Serial1.print(ControlData[1]);
-         //Serial1.print(BinDate[0]);
-         Write_to_Vehicle(BinDate,ControlData[1]);     //Send the data to Vehicle
-
-        if((ControlData[0]==0x01)&&(client.available()<=1270))
-         {
-           client.write(0x01);                        //tell the GCS ,send  your data  .
-           client.write(0x21);                        //0x01  0x21  (customized)
-         }
-         else if(ControlData[0]==0x02)
-         {
-           Bin_trans_flag=0;                           //If the first byte equal 0x02  ,after this trans jump out.
-         }
-         wait_ack();
-       }
-
-
-       //...TO DO
-       //add the confirm of Reboot function
-       //..TO DO
-
-
-       while(Serial.read() >= 0);                    //Before send the command to Vehicle ,clean the Rx buffer
-       while(!Serial.availableForWrite());           //Send the Boot signal to the Vehicle  0x30+0x20
-       Serial.write(0x30);
-       while(!Serial.availableForWrite());
-       Serial.write(0x20);
-       wait_ack();                                   //Wait for the Boot echo from Vehicle
-       Serial1.println("got the Boot ack");
-
-       client.flush();
-       client.write(0x02);                           //tell the GCS the trans finish, turn the mode of GCS
-       client.write(0x20);
-       wait_wifi_ack();
-       delay(5000);                                 //Wait for serval seconds to escape the current TCP link , then the sketch won't jump into the TCP transmission
-       Firmware_mode_flag=0;                        //Jump out the loop of TCP transmission and to be the WiFi Mavlink Bridge (UDP transmission)
-    }
+		client.flush();												//向Qt端发送命令之前，清除网络接收缓存
+		client.write(0x31);										//向Qt端发送结束命令：0x31+0x04(可自定义)
+		client.write(0x04);
+		wait_wifi_ack();											//等待Qt端回复
+		delay(5000);												//等待几秒钟，以使Qt端清理相关现场并断开TCP连接，不让ESP8266再次进入固件升级模式（其实不会出现这个问题）
+		Firmware_mode_flag=0;								//重置固件升级标志位，跳出该循环使其工作在WiFi Mavlink Bridge (UDP transmission)模式
+	}
 }
 
 // This function is to wait for the echo of vehicle
-
-void wait_ack(){
-  while(flag==0){
-    if(Serial.available()>0){
-      Serial.readBytes(SerialData, 2);
-      //Serial1.println(Serial.available());
-      Serial1.println(SerialData[0]);
-      Serial1.println(SerialData[1]);
-        if((SerialData[0]==0x12)&&(SerialData[1]==0x10))
-        {
-            flag=1;
-            SerialData[0]=0;
-            SerialData[1]=0;
-            //delay(100);
-        }
-        else
-        {
-          flag=0;
-          SerialData[0]=0;
-          SerialData[1]=0;
-          //delay(100);
-        }
-    }
-  //  else
-  //  {
-  //    Serial1.print(".");
-      //delay(1000);
-  //  }
-  }
-  flag=0;
+//此函数是等待飞控的回复
+void wait_ack()
+{
+	bool flag_vehicle=0;
+	char SerialData[2]={0};									//用于存放串口接收缓存数据
+	while(flag_vehicle==0) {								//此循环是一直等待回复
+		if(Serial.available()>0) {								//如果串口缓存有数据
+			Serial.readBytes(SerialData, 2);				//读取两个字节
+			Serial1.println(SerialData[0]);				//（调试用）打印出这两个字节
+			Serial1.println(SerialData[1]);
+			if((SerialData[0]==0x12)&&(SerialData[1]==0x10)) {		//如果两个字节为0x12+0x10
+				flag_vehicle=1;									//置标志位flag为1，跳出循环
+				SerialData[0]=0;									//清零接收数组
+				SerialData[1]=0;
+			} else {													//如果两个字节不是0x12+0x10
+				flag_vehicle=0;									//清零接收数组，继续循环
+				SerialData[0]=0;
+				SerialData[1]=0;
+			}
+		}
+	}
+	flag_vehicle=0;												//重置循环标志位flag为0，使下次使用正常
 }
 
-// This function is write the flash
-
+// This function is to send the bin data
+//此函数是向飞控发送规定格式的bin文件数据
+//发送格式：0x27+<length>+<Data>+0x20     (length默认为252字节，必须为4的倍数)
 void Write_to_Vehicle(char *binfile,uint16_t length)
 {
-  Serial.write(0x27);
-  Serial.write(length);
-  for(uint16_t i=0; i<length; i++)
-  Serial.write(binfile[i]);
-  Serial.write(0x20);
-  Serial.flush();
+	Serial.write(0x27);
+	Serial.write(length);
+	for(uint16_t i=0; i<length; i++)
+	Serial.write(binfile[i]);
+	Serial.write(0x20);											//按照格式发送数据
+	Serial.flush();													//等待数据发送完成
 }
 
 // This function is wait for the TCP client echo
-
+//此函数是等待TCP客户端（Qt端）的回复
 void wait_wifi_ack()
 {
-  while(flag==0){
-    if(client.available()>0){
-      client.readBytes(ClientData, 2);
-      Serial1.println(ClientData[0]);
-      Serial1.println(ClientData[1]);
-      client.flush();
-        if((ClientData[0]==0x12)&&(ClientData[1]==0x10))
-        {
-            flag=1;
-            ClientData[0]=0;
-            ClientData[1]=0;
-            delay(100);
-        }
-        else
-        {
-          flag=0;
-          SerialData[0]=0;
-          SerialData[1]=0;
-          delay(100);
-        }
-    }
-    else
-    {
-      Serial1.print(".");
-      delay(1000);
-    }
-  }
-  flag=0;
+	bool flag_wifi=0;
+	while(flag_wifi==0) {										//等待回复的大循环
+		if(client.available()>0) {								//如果网络接收缓存区有数据
+			client.readBytes(ClientData,2);				//以下与串口等待回复相同
+			Serial1.println(ClientData[0]);
+			Serial1.println(ClientData[1]);
+			client.flush();
+			if((ClientData[0]==0x12)&&(ClientData[1]==0x10)) {
+				flag_wifi=1;
+				ClientData[0]=0;
+				ClientData[1]=0;
+				delay(100);
+			} else {
+				flag_wifi=0;
+				ClientData[0]=0;
+				ClientData[1]=0;
+				delay(100);
+			}
+		} else {														//如果网络接收缓存区没有数据
+			Serial1.print(".");
+			delay(1000);
+		}
+	}
+	flag_wifi=0;														//重置标志位，使下次工作正常
 }
