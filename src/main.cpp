@@ -51,21 +51,9 @@
 #define GPIO02  2
 WiFiClient client;									//定义一个TCP client对象
 WiFiServer server(8086);						//定义一个TCP server对象，并监听端口8086
-char ClientData[2]={0};							//用于存放网络接收缓存数据
 
-/*char SerialData[2]={0};						//用于存放串口接收缓存数据
- char ControlData[2]={0};						//用于存放每一帧数据前两个字节
-char BinDate[256]={0};							//用于存放每一帧数据中实际bin文件数据
-char temp=0;											//临时变量，用于存放当前读取的字节数
-char tempPos=0;									//临时变量，用于存放数据存储位置
-char length=0;										//临时变量，用于存放当前帧还需读取的字节长度
-char flag=0;												//等待回复标志位
-char firstFlag=0;										//每一帧数据第一次读取标志位
-char Bin_trans_flag=1;							//bin文件传输标志位
-char Firmware_mode_flag=0;				//固件升级标志
 char Reboot_ID1[41]={0xfe,0x21,0x72,0xff,0x00,0x4c,0x00,0x00,0x80,0x3f,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xf6,0x00,0x01,0x00,0x00,0x48,0xf0};
 char Reboot_ID0[41]={0xfe,0x21,0x45,0xff,0x00,0x4c,0x00,0x00,0x80,0x3f,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xf6,0x00,0x00,0x00,0x00,0xd7,0xac};
-*/
 
 //function
 void wait_ack();
@@ -245,19 +233,6 @@ void setup() {
 //-- Main Loop
 void loop() {
 
-	bool flag=0;											//等待回复标志位
-	bool firstFlag=0;										//每一帧数据第一次读取标志位
-	bool Bin_trans_flag=1;							//bin文件传输标志位
-	bool Firmware_mode_flag=0;				//固件升级标志
-
-	char temp=0;											//临时变量，用于存放当前读取的字节数
-	char tempPos=0;									//临时变量，用于存放数据存储位置
-	char length=0;										//临时变量，用于存放当前帧还需读取的字节长度
-	char ControlData[2]={0};						//用于存放每一帧数据前两个字节
-	char BinDate[256]={0};							//用于存放每一帧数据中实际bin文件数据
-
-	char Reboot_ID1[41]={0xfe,0x21,0x72,0xff,0x00,0x4c,0x00,0x00,0x80,0x3f,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xf6,0x00,0x01,0x00,0x00,0x48,0xf0};
-	char Reboot_ID0[41]={0xfe,0x21,0x45,0xff,0x00,0x4c,0x00,0x00,0x80,0x3f,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xf6,0x00,0x00,0x00,0x00,0xd7,0xac};
 
 	if(!updateStatus.isUpdating()) {
 		GCS.readMessage();
@@ -266,12 +241,24 @@ void loop() {
 	}
 	updateServer.checkUpdates();
 
-    //liangzelang below//
-	client = server.available();								//检测是否有TCP客户端连接至服务器
-	if(client)															//如果有TCP客户端连接上，至 固件升级标志位 为1
+  //liangzelang below//
+	bool flag=0;											//等待回复标志位
+	bool firstFlag=0;										//每一帧数据第一次读取标志位
+	bool Bin_trans_flag=1;							//bin文件传输标志位
+	bool Firmware_mode_flag=0;				//固件升级标志
+
+	char temp=0;											//临时变量，用于存放当前读取的字节数
+	char tempPos=0;									//临时变量，用于存放数据存储位置
+	char length=0;										//临时变量，用于存放当前帧还需读取的字节长度
+	char ClientData[2]={0};							//用于存放网络接收缓存数据
+	char ControlData[2]={0};						//用于存放每一帧数据前两个字节
+	char BinDate[256]={0};							//用于存放每一帧数据中实际bin文件数据
+
+	client = server.available();						//检测是否有TCP客户端连接至服务器
+	if(client)													//如果有TCP客户端连接上，至 固件升级标志位 为1
 		Firmware_mode_flag=1;
-    while(Firmware_mode_flag) {						//进入固件升级模式
-    	while(!client.available()) {							//等待已连接上的客户端的数据
+    while(Firmware_mode_flag) {				//进入固件升级模式
+    	while(!client.available()) {					//等待已连接上的客户端的数据
 			Serial1.print(".");
 			delay(500);
     	}
@@ -291,7 +278,7 @@ void loop() {
 			ClientData[0] = 0;
 			ClientData[1] = 0;
 		}
-       flag=0;
+    flag=0;
 
 		while(!Serial.availableForWrite());			//避免出现奇怪的错误，先发送一次同步信号
 		Serial.write(0x21);										//发送同步请求信号至飞控：0x21+0x20
@@ -308,17 +295,17 @@ void loop() {
 			Serial.write(Reboot_ID0[i]);
 		}
 
-		delay(1500);												//延时1.5秒，等待飞控重启。此延时不能超过5秒，因为bootloader的延时为5秒
-		while(Serial.available()>0);						//此处好像错了，先保留。Attention！！！
-		Serial.read();
-		while(Serial.read() >= 0);							//通过读取串口的接受缓冲区来清除缓存区数据
+		delay(1500);											//延时1.5秒，等待飞控重启。此延时不能超过5秒，因为bootloader的延时为5秒
+		while(Serial.available()>0)						//通过读取清缓存
+		  Serial.read();
+		while(Serial.read() >= 0);						//通过读取串口的接受缓冲区来清除缓存区数据
 		//Serial.flush();                                 // Attention!!!  this function is to wait for the completion of sending  afer arduino 1.0
 																// and especially, prior to arduino 1.0 ,this function instead remove the Rx buffer
 		while(!Serial.availableForWrite());
-		Serial.write(0x21);										//发送同步请求信号至飞控：0x21+0x20
+		Serial.write(0x21);									//发送同步请求信号至飞控：0x21+0x20
 		while(!Serial.availableForWrite());
 		Serial.write(0x20);
-		wait_ack();													//等待飞控的回复  0x12+0x10(Insync Ok)  0x12+0x13(Insync Invalid)
+		wait_ack();												//等待飞控的回复  0x12+0x10(Insync Ok)  0x12+0x13(Insync Invalid)
 		Serial1.println("got the Insync ack");
 		delay(1000);
 
@@ -342,14 +329,18 @@ void loop() {
 		client.write(0x03);
 		wait_wifi_ack();											//等待来自Qt端的回复
 		Serial1.println("got the wifi start ack");
-
-		client.write(0x31);										//向Qt端发送数据请求：0x31+0x01 (可自定义)
-		client.write(0x01);
+		if(Bin_trans_flag==1) {
+			client.write(0x31);									//向Qt端发送数据请求：0x31+0x01 (可自定义)
+			client.write(0x01);
+		}
 		while(Bin_trans_flag==1) {						//进入循环接收、烧写bin文件的循环
 			while(!client.available());
 			if(firstFlag==0) {										//如果是每一帧的第一次读取
 				client.readBytes(ControlData, 2);		//先读取前两个字节，第一个字节（0x01：不是最后一帧数据，0x02：最后一帧数据）
-																			//第二个字节（此帧数据的长度，不含头两个字节，一般为252.值得注意的是该数字必须是4的倍数）
+																			      //第二个字节（此帧数据的长度，不含头两个字节，一般为252.值得注意的是该数字必须是4的倍数）
+        if(ControlData[1]%4!=0) {           //判断长度是否为4的倍数，如果不是，则输出提示，同时接收到来自飞控的无效回复（0x12+0x13）
+          Serial1.println("the length is not the multiple of 4,fatal error.");
+        }
 				temp=client.readBytes(BinDate, ControlData[1]);	//欲读取ControlData[1]长度的数据，并得到实际读取长度temp
 				if(temp<ControlData[1]) {					//如果没有读取完这一帧的数据
 					length= ControlData[1]-temp;		//计算还需要读取的字节长度length
@@ -402,7 +393,7 @@ void loop() {
 //此函数是等待飞控的回复
 void wait_ack()
 {
-	bool flag_vehicle=0;
+	char flag_vehicle=0;
 	char SerialData[2]={0};									//用于存放串口接收缓存数据
 	while(flag_vehicle==0) {								//此循环是一直等待回复
 		if(Serial.available()>0) {								//如果串口缓存有数据
@@ -440,22 +431,23 @@ void Write_to_Vehicle(char *binfile,uint16_t length)
 //此函数是等待TCP客户端（Qt端）的回复
 void wait_wifi_ack()
 {
-	bool flag_wifi=0;
+	char flag_wifi=0;
+	char FromClientData[2]={0};
 	while(flag_wifi==0) {										//等待回复的大循环
 		if(client.available()>0) {								//如果网络接收缓存区有数据
-			client.readBytes(ClientData,2);				//以下与串口等待回复相同
-			Serial1.println(ClientData[0]);
-			Serial1.println(ClientData[1]);
+			client.readBytes(FromClientData,2);				//以下与串口等待回复相同
+			Serial1.println(FromClientData[0]);
+			Serial1.println(FromClientData[1]);
 			client.flush();
-			if((ClientData[0]==0x12)&&(ClientData[1]==0x10)) {
+			if((FromClientData[0]==0x12)&&(FromClientData[1]==0x10)) {
 				flag_wifi=1;
-				ClientData[0]=0;
-				ClientData[1]=0;
+				FromClientData[0]=0;
+				FromClientData[1]=0;
 				delay(100);
 			} else {
 				flag_wifi=0;
-				ClientData[0]=0;
-				ClientData[1]=0;
+				FromClientData[0]=0;
+				FromClientData[1]=0;
 				delay(100);
 			}
 		} else {														//如果网络接收缓存区没有数据
