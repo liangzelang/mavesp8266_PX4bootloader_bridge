@@ -46,6 +46,10 @@ MavESP8266GCS::MavESP8266GCS()
 {
     memset(&_message, 0, sizeof(_message));
 }
+void MavESP8266GCS::closeUdp()
+{
+	_udp.stop();
+}
 
 //---------------------------------------------------------------------------------
 //-- Initialize

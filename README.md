@@ -36,7 +36,7 @@ The ```git clone --recursive``` above not only cloned the MavESP8266 repository 
 
 User level (as well as wiring) instructions can be found here: https://pixhawk.org/peripherals/8266
 
-* Resetting to Defaults: In case you change the parameters and get locked out of the module, all the parameters can be reset by bringing the GPIO02 pin low (Connect GPIO02 pin to GND pin). 
+* Resetting to Defaults: In case you change the parameters and get locked out of the module, all the parameters can be reset by bringing the GPIO02 pin low (Connect GPIO02 pin to GND pin).
 
 ### MavLink Protocol
 
@@ -48,14 +48,83 @@ There are some preliminary URLs that can be used for checking the WiFi Bridge st
 
 
 
-*********************************************************************************************************
-CUSTOMIZED
+###  固件升级模式
 
-I add other mode to upgrade the Firmware of PX4 through the WIFI ,and the Bootloader is recommended to use the following project.
 
-https://github.com/PX4/Bootloader.git
+#### 整体流程：
 
-However you should do some modifications .  
-1,   Change the default Serial port to USART3 with 921600 baud rate  ,because this project is upgrade the FW through the ESP8266 whose Serial port is connected to the USART3 of PX4.
 
-2016.05.27
+-->	TCP客户端（Qt端）连接至TCP Server（ESP8266）
+
+-->	TCP客户端（Qt端）向TCP Server发送执行流程（0x01+0x20:upload模式 ，0x02+0x20:erase模式）
+
+-->	TCP Server（ESP8266） 向飞控发送同步信号、擦除信号
+
+-->	(erase模式： TCP Server向飞控发送重启信号，并向TCP发送结束信号)
+
+-->	upload模式：
+
+
+LOOP Begin： TCP Server（ESP8266）向TCP客户端（Qt端）发送数据请求
+
+	TCP Server（ESP8266）接收到一帧数据
+
+	TCP Server（ESP8266）按照Bootloader定义的数据格式发送至飞控     
+
+LOOP End： TCP Server（ESP8266）检测到最后一帧数据并发送完成
+
+
+-->     TCP Server(ESP8266)向飞控发送重启信号，并向TCP客户端（Qt端）发送结束信号
+
+
+####  通信信号定义：
+
+
++ 1、TCP Server(ESP8266)与TCP客户端（Qt端）通信信号定义(C代表TCP客户端，S代表TCP服务器)
+
+  Qt-->ESP8266:
+
+	模式（流程）选择信号：  0x31+0x08（upload模式）   
+	　　　　　　　　　　　　0x31+0x09(erase模式)
+
+	回复信号:            0x31+0x10 (OK:程序继续)  
+　　　　　　　　　　　　　0x31+0x11(invalid：调回至固件升级模式开始)
+　　　　　　　　　　　　　0x31+0x12(结束固件升级模式)
+
+	数据发送信号:          0x01+length+Data(非结束帧)  
+	　　　　　　　　　　　　 0x02+length+Data(结束帧)
+
+  ESP8266-->Qt:
+
+   数据请求信号:          0x31+0x01
+
+   擦除确认信号:          0x31+0x02
+
+   提示信号:             0x31+0x03
+
+   结束信号:             0x31+0x04
+
+
++ 2、TCP Server（ESP8266）与飞控通信信号定义（S代表ESP8266，V代表飞控）
+
+  ESP8266-->飞控
+
+   同步信号：                      0x21+0x20
+
+   擦除信号：                      0x23+0x20
+
+   烧写信号：                      0x27+length+Data+0x20
+
+   重启信号：                      0x30+0x20
+
+  飞控-->ESP8266
+
+   回复信号：                      0x12+0x10(OK)  0x12+0x13(invalid)
+
+
+注：1中的信号为自定义，2中的信号为Bootloader中定义的
+
+
+烧写细节：
+
+    每次烧写252个字节，该字节长度需在0-255之间，且必须为4的倍数。
