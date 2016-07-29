@@ -61,6 +61,7 @@ char Reboot_ID0[41]={0xfe,0x21,0x45,0xff,0x00,0x4c,0x00,0x00,0x80,0x3f,0x00,0x00
 //function
 void wait_ack();
 void wait_wifi_ack();
+char wait_backup_ack();
 void firmware_upload();
 void udp_restart();
 void Write_to_Vehicle(char *binfile,uint16_t length);
@@ -269,6 +270,8 @@ void firmware_upload()
 	const uint8_t eraseConfirm[2]={0x31,0x02};
 	const uint8_t readyConfirm[2]={0x31,0x03};
 	const uint8_t finishConfirm[2]={0x31,0x04};
+	const uint8_t backupOk[2]={0x31,0x05};
+	const uint8_t backupAlready[2]={0x31,0x06};
 	char ClientData[2]={0};                      //用于存放网络接收缓存数据
 	char ControlData[2]={0};                     //用于存放每一帧数据前两个字节
 	char BinDate[256]={0};                       //用于存放每一帧数据中实际bin文件数据
@@ -353,7 +356,14 @@ void firmware_upload()
 		while(!Serial.availableForWrite());    //等待串口可写
 		Serial.write(0x23);            //发送Erase信号至飞控：0x23+0x20
 		while(!Serial.availableForWrite());
-		Serial.write(0x20);
+		Serial.write(0x20);//等待BL备份完成
+		char backup_temp=wait_backup_ack();
+		if(backup_temp==0x01) {
+			client.write(backupOk, sizeof(backupOk));//向Qt端发送芯片擦除确认请求: 0x31+0x05(可自定义)
+		} else if(backup_temp==0x02) {
+			client.write(backupAlready, sizeof(backupAlready));//向Qt端发送芯片擦除确认请求: 0x31+0x06(可自定义)
+		}
+
 		wait_ack();                    //等待飞控的同步信号回复：0x12+0x10(Insync Ok)  0x12+0x13(Insync Invalid)
 		Serial1.println("got the Erase ack");
 
@@ -429,20 +439,20 @@ void firmware_upload()
 			Serial.write(0x20);
 			wait_ack();                            //等待飞控回复
 			Serial1.println("got the Boot ack");
-
-			client.flush();                       //向Qt端发送命令之前，清除网络接收缓存
-			client.write(finishConfirm, sizeof(finishConfirm));//向Qt端发送结束命令：0x31+0x04(可自定义)
-			wait_wifi_ack();                      //等待Qt端回复
-			if(returnFlag==1) {
-				returnFlag=0;
-				client.stop();
-				udp_restart();
-				return;
-			}
-			if(confirmFlag==1) {
-				confirmFlag=0;                    //重置确认擦除标志位
-				continue;                         //如果Qt端取消擦除，则重新开始本次循环，等来Qt的指令
-			}
+		}
+		boot_flag=0;
+		client.flush();                       //向Qt端发送命令之前，清除网络接收缓存
+		client.write(finishConfirm, sizeof(finishConfirm));//向Qt端发送结束命令：0x31+0x04(可自定义)
+		wait_wifi_ack();                      //等待Qt端回复
+		if(returnFlag==1) {
+			returnFlag=0;
+			client.stop();
+			udp_restart();
+			return;
+		}
+		if(confirmFlag==1) {
+			confirmFlag=0;                    //重置确认擦除标志位
+			continue;                         //如果Qt端取消擦除，则重新开始本次循环，等来Qt的指令
 		}
 		//delay(5000);                        //等待几秒钟，以使Qt端清理相关现场并断开TCP连接，不让ESP8266再次进入固件升级模式（其实不会出现这个问题）
 		//Firmware_mode_flag=0;               //重置固件升级标志位，跳出该循环使其工作在WiFi Mavlink Bridge (UDP transmission)模式
@@ -473,6 +483,31 @@ void wait_ack()
 		}
 	}
 	flag_vehicle=0;               //重置循环标志位flag为0，使下次使用正常
+}
+
+char wait_backup_ack()
+{
+	char flag_backup=0;
+	char SerialData[2]={0};        //用于存放串口接收缓存数据
+	while(flag_backup==0) {       //此循环是一直等待回复
+		if(Serial.available()>0) { //如果串口缓存有数据
+			Serial.readBytes(SerialData, 2);   //读取两个字节
+			Serial1.println(SerialData[0]);    //（调试用）打印出这两个字节
+			Serial1.println(SerialData[1]);
+			if((SerialData[0]==0x40)&&(SerialData[1]==0x10)) {  //如果两个字节为0x40+0x10(可自定义)
+				return 0x01;
+				//client.write(backupOk, sizeof(backupOk));//向Qt端发送备份完成信号: 0x41+0x10(可自定义)
+			} else if((SerialData[0]==0x41)&&(SerialData[1]==0x10)) {
+				return 0x02;
+			} else {              //如果两个字节不是0x12+0x10
+				flag_backup=0;   //清零接收数组，继续循环
+				SerialData[0]=0;
+				SerialData[1]=0;
+			}
+		}
+	}
+	flag_backup=0;               //重置循环标志位flag为0，使下次使用正常
+	return 0;
 }
 
 // This function is to send the bin data
